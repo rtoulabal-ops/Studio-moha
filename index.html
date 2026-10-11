@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio Histoire IA</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif;background:#fafafa;color:#1a1a1a;min-height:100vh;padding:1rem;font-size:15px;line-height:1.5;max-width:900px;margin:0 auto}
+h1{font-size:1.3rem;text-align:center;margin-bottom:.2rem}
+.sub{text-align:center;color:#777;font-size:.75rem;font-style:italic;margin-bottom:1rem}
+.box{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:1rem;margin-bottom:.8rem}
+.box.ok{border-color:#2d8a4e}
+.lbl{display:block;font-size:.68rem;color:#777;margin-bottom:.4rem;text-transform:uppercase;font-weight:600}
+input[type=password],input[type=text],textarea,select{width:100%;padding:.7rem;border:1px solid #e5e5e5;background:#fafafa;color:#1a1a1a;border-radius:8px;font-family:inherit;font-size:.88rem;margin-bottom:.4rem}
+textarea{min-height:70px;resize:vertical}
+input:focus,textarea:focus,select:focus{outline:none;border-color:#7c3aed}
+button{background:#1a1a1a;color:#fff;border:none;padding:.75rem;border-radius:8px;width:100%;font-size:.88rem;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:.5rem}
+button.purple{background:#7c3aed}
+button:disabled{opacity:.3}
+.diag{background:#0a0a12;color:#a8d8b0;padding:.6rem;border-radius:6px;font-family:monospace;font-size:.7rem;line-height:1.5;min-height:30px;max-height:150px;overflow-y:auto;margin-bottom:.6rem;white-space:pre-wrap}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:.3rem;margin-bottom:.8rem;background:#fff;border-radius:12px;padding:.3rem;border:1px solid #e5e5e5}
+.tab{padding:.6rem;border-radius:8px;text-align:center;cursor:pointer;font-weight:600;color:#777;font-size:.7rem}
+.tab.active{background:#1a1a1a;color:#fff}
+.panel{display:none}
+.panel.active{display:block}
+.scene{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:1rem;margin-bottom:.7rem}
+.sc-head{display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem}
+.sc-num{background:#7c3aed;color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;flex-shrink:0}
+.sc-title{font-size:.82rem;font-weight:600;flex:1}
+.sc-status{font-size:.65rem;padding:.2rem .5rem;border-radius:10px;background:#f5f5f5;color:#777;text-transform:uppercase;font-weight:600}
+.sc-status.done{background:#e3f5e9;color:#2d8a4e}
+.sc-status.processing{background:#fff5e3;color:#d4a017}
+.sc-status.failed{background:#fce3e3;color:#c0392b}
+.sc-rm{width:26px;height:26px;border-radius:50%;border:1px solid #e5e5e5;background:#fff;cursor:pointer;color:#c0392b;font-size:.85rem}
+.fld{margin-bottom:.5rem}
+.fld label{display:block;font-size:.65rem;color:#777;margin-bottom:.25rem;text-transform:uppercase;font-weight:600}
+.fld textarea{font-size:.82rem;min-height:55px}
+.file-zone{position:relative;border:2px dashed #e5e5e5;border-radius:8px;padding:.9rem;text-align:center;cursor:pointer;margin-bottom:.5rem}
+.file-zone input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.file-zone img,.file-zone video{width:100%;max-height:130px;object-fit:contain;border-radius:6px;display:block}
+.file-zone .up-t{font-size:.75rem}
+.file-zone .up-h{font-size:.62rem;color:#999;margin-top:.15rem}
+.f-rm{padding:.3rem .6rem;border:1px solid #e5e5e5;background:#fff;border-radius:6px;font-size:.65rem;color:#c0392b;cursor:pointer;margin-top:.3rem}
+.sc-vid{margin-top:.5rem;border-radius:8px;overflow:hidden;background:#000}
+.sc-vid video{width:100%;display:block}
+.timer{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:.9rem;margin-bottom:.8rem;display:none}
+.timer.visible{display:block}
+.tv{font-size:2rem;font-weight:700;text-align:center;font-family:monospace;margin-bottom:.2rem;color:#7c3aed}
+.tl{font-size:.68rem;color:#777;text-align:center;text-transform:uppercase;margin-bottom:.5rem}
+.pb{width:100%;height:6px;background:#f5f5f5;border-radius:3px;overflow:hidden;margin-top:.6rem}
+.pb-f{height:100%;background:#7c3aed;width:0%;transition:width .3s}
+.tpl-cat{margin-bottom:.9rem}
+.tpl-ct{font-size:.66rem;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.4rem;padding-bottom:.25rem;border-bottom:1px solid #e5e5e5}
+.tpl{padding:.65rem .8rem;background:#fafafa;border:1px solid #e5e5e5;border-radius:8px;cursor:pointer;margin-bottom:.3rem}
+.tpl:active{background:#f5f5f5}
+.tpl-n{font-size:.8rem;font-weight:600;margin-bottom:.1rem}
+.tpl-d{font-size:.64rem;color:#777;line-height:1.3}
+.sel-scene{display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:.6rem}
+.sc-chip{padding:.35rem .65rem;border-radius:20px;border:1px solid #e5e5e5;background:#fff;font-size:.68rem;cursor:pointer;font-weight:600;color:#777}
+.sc-chip.active{background:#7c3aed;color:#fff;border-color:#7c3aed}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.6rem}
+.g-item{border-radius:8px;overflow:hidden;border:1px solid #e5e5e5;background:#000}
+.g-item video{width:100%;display:block}
+.g-cap{padding:.4rem .6rem;background:#fff;font-size:.65rem;color:#777;display:flex;justify-content:space-between;align-items:center}
+.g-cap a{font-size:.62rem;padding:.2rem .4rem;border-radius:4px;background:#2d8a4e;color:#fff;text-decoration:none}
+.empty{text-align:center;padding:1.5rem;color:#999;font-size:.8rem}
+.toast{position:fixed;top:1rem;left:50%;transform:translateX(-50%) translateY(-100px);background:#1a1a1a;color:#fff;padding:.7rem 1.2rem;border-radius:8px;font-size:.8rem;z-index:1000;opacity:0;transition:all .3s;max-width:90vw;text-align:center}
+.toast.visible{transform:translateX(-50%) translateY(0);opacity:1}
+.toast.success{background:#2d8a4e}
+.toast.error{background:#c0392b}
+</style>
+</head>
+<body>
+
+<h1>Studio Histoire IA</h1>
+<p class="sub">Magic Hour · Templates pro</p>
+
+<div class="box ok" id="apiBox">
+  <label class="lbl">Clé API Magic Hour</label>
+  <input type="password" id="apiKeyInput" placeholder="mhk_live_...">
+  <div style="display:flex; gap:0.5rem;">
+    <button id="saveKeyBtn" style="flex:1;">Enregistrer la clé</button>
+    <button id="testKeyBtn" style="flex:1; background:#7c3aed;">Tester la clé</button>
+  </div>
+  <div class="diag" id="apiDiag">Initialisation du script...</div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="p1">📖 Histoire</div>
+  <div class="tab" data-tab="p2">🎯 Templates</div>
+  <div class="tab" data-tab="p3">🎬 Vidéos</div>
+</div>
+
+<div class="panel active" id="p1">
+  <div class="box">
+    <label class="lbl">Titre de l'histoire</label>
+    <input type="text" id="storyTitle" placeholder="Ex: Course poursuite à Paris">
+  </div>
+  <div class="box">
+    <label class="lbl">Durée par vidéo</label>
+    <select id="storyDuration">
+      <option value="5">5 secondes</option>
+      <option value="6" selected>6 secondes</option>
+      <option value="7">7 secondes</option>
+      <option value="8">8 secondes</option>
+      <option value="10">10 secondes</option>
+    </select>
+  </div>
+  <div class="box">
+    <label class="lbl">Style visuel</label>
+    <select id="globalStyle">
+      <option value="realistic" selected>📸 Réaliste photographie pro</option>
+      <option value="ghibli">🌿 Studio Ghibli</option>
+      <option value="anime">🗾 Anime japonaise</option>
+      <option value="pixar">✨ Pixar 3D</option>
+      <option value="disney">🏰 Disney 2D</option>
+      <option value="cartoon">🎨 Cartoon 2D</option>
+      <option value="netflix">🎬 Netflix cinématique</option>
+      <option value="jt">📺 JT News</option>
+      <option value="noir">🌓 Film Noir</option>
+      <option value="vhs">📼 VHS</option>
+      <option value="scifi">🛸 Sci-Fi</option>
+      <option value="horror">👻 Horreur</option>
+    </select>
+  </div>
+  <div class="diag" id="log">Prêt.</div>
+  <div id="scenesList"></div>
+  <button id="addSceneBtn">＋ Ajouter une scène</button>
+  <button class="purple" id="generateBtn" disabled>🎬 Générer l'histoire</button>
+  <button id="stopBtn" style="display:none;background:#fff;color:#c0392b;border:1px solid #c0392b">⏹ Arrêter</button>
+  <div class="timer" id="timerBox">
+    <div class="tv" id="timerVal">00:00</div>
+    <div class="tl" id="timerLbl">Prêt</div>
+    <div class="pb"><div class="pb-f" id="progressFill"></div></div>
+  </div>
+</div>
+
+<div class="panel" id="p2">
+  <div class="box">
+    <label class="lbl">Scène à remplir</label>
+    <div class="sel-scene" id="sceneSelector"></div>
+    <div style="font-size:.7rem;color:#999">Choisis la scène puis clique un template pour la remplir.</div>
+  </div>
+  <div class="box">
+    <label class="lbl">Bibliothèque de prompts</label>
+    <div id="templatesList"></div>
+  </div>
+</div>
+
+<div class="panel" id="p3">
+  <div class="box">
+    <label class="lbl">Vidéos générées</label>
+    <div class="gallery" id="gallery"><div class="empty">Aucune vidéo</div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// AFFICHAGE DES ERREURS JS DIRECTEMENT SUR L'ÉCRAN POUR DÉBOGUER SUR MOBILE
+window.onerror = function(msg, url, line, col, error) {
+  var diag = document.getElementById('apiDiag');
+  if(diag) diag.textContent = '❌ Erreur JavaScript : ' + msg + ' (ligne ' + line + ')';
+  return false;
+};
+
+// ══════════════════════════════════════════════════════════════════
+// CONFIGURATION API
+// ══════════════════════════════════════════════════════════════════
+var API_KEY = '';
+var API_BASE = 'https://api.magichour.ai/v1';
+
+var ART_STYLES = {
+  realistic:'Cinematic', ghibli:'Studio Ghibli', anime:'Anime',
+  pixar:'3D Render', disney:'Cartoon', cartoon:'Cartoon',
+  netflix:'Cinematic', jt:'Cinematic', noir:'Black and White',
+  vhs:'Vintage', scifi:'Sci-Fi', horror:'Cinematic'
+};
+
+var STYLE_PROMPTS = {
+  realistic:'cinematic photography, shot on 35mm film, natural lighting, photorealistic, subtle film grain.',
+  ghibli:'Studio Ghibli animation aesthetic, Hayao Miyazaki style, hand-painted watercolor backgrounds, warm pastel palette.',
+  anime:'modern Japanese anime style, cel-shaded characters, sharp ink outlines, vibrant colors.',
+  pixar:'high-quality Pixar 3D animation style, subsurface scattering, soft cinematic lighting.',
+  disney:'classic Disney 2D animation style, hand-drawn cel animation, elegant line work.',
+  cartoon:'2D cartoon animation style, bold black outlines, flat vibrant colors.',
+  netflix:'Netflix original series cinematic look, dramatic key light, teal and orange color grading.',
+  jt:'professional television news studio look, soft studio lighting, neutral background.',
+  noir:'classic film noir aesthetic, high contrast black and white, chiaroscuro.',
+  vhs:'vintage VHS aesthetic, analog artifacts, scan lines, chromatic aberration.',
+  scifi:'science-fiction cinematic aesthetic, cool blue and cyan lighting, anamorphic look.',
+  horror:'cinematic horror aesthetic, high contrast, deep shadows, desaturated palette.'
+};
+
+var TEMPLATES = [
+  { category:'🎬 Cinéma Hollywoodien', items:[
+    { name:'Blockbuster héroïque', desc:'Héros qui se retourne au ralenti', prompt:'Cinematic hero shot, slow motion. A lone figure slowly turns to face the camera. Standing on a rooftop at golden hour. Low angle camera tracking forward. Warm golden sunlight with lens flare. Epic, determined mood. 35mm film grain, anamorphic lens.' },
+    { name:'Duel au coucher de soleil', desc:'Deux personnages face à face', prompt:'Western-style cinematic shot. Two figures stand facing each other, tension in the air. Dusty desert at sunset. Wide static shot, symmetrical composition. Orange and red sky, long shadows. Sergio Leone style.' },
+    { name:'Romance sous la pluie', desc:'Couple sous la pluie', prompt:'Romantic cinematic moment. Two people stand close together in soft rain, one holding an umbrella. Empty city street at night. Slow dolly-in, shallow depth of field. Wet pavement reflecting warm streetlights. Tender, melancholic.' },
+    { name:'Course-poursuite', desc:'Voiture qui dérape', prompt:'High-octane car chase shot. A black sports car drifts around a corner at high speed. Narrow European street at night. Mounted camera following the car. Neon lights reflecting off wet asphalt. Thrilling, kinetic.' },
+    { name:'Révélation dramatique', desc:'Personnage qui découvre', prompt:'Cinematic reveal shot. A character slowly lifts their head, eyes widening in shock. Dark interior, single window with light. Slow push-in on the face. Dramatic side lighting, half the face in shadow. Rembrandt lighting.' },
+    { name:'Poursuite en forêt', desc:'Course dans une forêt brumeuse', prompt:'Thriller chase shot. A figure runs through a misty forest, tree branches whipping past. Early morning fog. Handheld camera following behind. Muted greens and greys, cold light filtering through trees.' }
+  ]},
+  { category:'📹 Documentaire & Nature', items:[
+    { name:'Plan large nature', desc:'Paysage qui se révèle', prompt:'Documentary wide establishing shot. A vast mountain range revealed slowly as clouds part. Early morning golden light. Slow drone push-in, epic scale. Snow-capped peaks. National Geographic style.' },
+    { name:'Macro faune & flore', desc:'Gros plan insecte', prompt:'Macro nature documentary shot. A bee lands on a blooming flower, pollen dust visible. Extreme close-up, macro lens. Slow motion, shallow depth of field. Soft natural sunlight. BBC Earth style.' },
+    { name:'Interview témoin', desc:'Personnage qui parle', prompt:'Documentary interview shot. A weathered older person speaks directly to camera, sitting on a wooden chair. Simple neutral background, soft window light. Locked-off medium close-up.' },
+    { name:'Déambulation ville', desc:'Piéton dans une rue animée', prompt:'Documentary street shot. A pedestrian walks through a crowded market. Handheld camera following at shoulder height. Natural overcast daylight. Vibrant colors of local culture. Cinéma vérité.' }
+  ]},
+  { category:'🎨 Animation & Anime', items:[
+    { name:'Ghibli - vol dans le ciel', desc:'Personnage qui vole', prompt:'Studio Ghibli anime shot. A young character gently floats upward through a vast blue sky, arms outstretched. Fluffy white clouds drifting past. Slow aerial tracking shot. Painterly watercolor clouds.' },
+    { name:'Combat anime', desc:'Combat stylisé anime', prompt:'Anime action sequence. Two characters clash mid-air, sparks flying from crossed blades. Speed lines and dynamic angles. Fast cuts, flash frames, motion blur. Cel-shaded anime style.' },
+    { name:'Pixar personnage', desc:'Personnage 3D expressif', prompt:'Pixar 3D animation shot. A cute expressive character looks directly at camera with wide eyes, blinks slowly. Soft global illumination, subsurface scattering. Cinema-quality lighting.' },
+    { name:'Disney conte', desc:'Scène de conte de fées', prompt:'Classic Disney 2D animation. A princess in an elegant dress stands in a moonlit castle courtyard. Slow camera pull-back. Soft magical glowing atmosphere, fireflies floating.' },
+    { name:'Cartoon absurde', desc:'Gag cartoon dynamique', prompt:'Cartoon animation shot. A character slips on a banana peel, eyes bulging, limbs flailing. Bold black outlines, flat vibrant colors. Cartoon physics, squash and stretch.' }
+  ]},
+  { category:'📱 TikTok / Reels viral', items:[
+    { name:'Hook 3 secondes', desc:'Accroche visuelle', prompt:'Viral TikTok shot. Fast zoom-in on a striking, unexpected visual on a plain background. Vertical 9:16 framing, bright vivid colors. Snappy quick motion, punchy edit. Scroll-stopping.' },
+    { name:'Transition Whip', desc:'Whip pan rapide', prompt:'TikTok transition shot. Subject whips their hand across the lens, revealing a completely different scene. Fast whip-pan motion blur. Vertical 9:16. Energetic, trendy.' },
+    { name:'Avatar qui parle', desc:'Face caméra', prompt:'Social media talking head shot. A young stylish character speaks directly to the vertical camera, natural hand gestures. Cozy well-lit room. Static selfie angle. Modern content creator aesthetic.' },
+    { name:'Avant/Après', desc:'Transformation choc', prompt:'Transformation reveal shot. The subject transforms from plain to stunning with a quick flash. Vertical 9:16. Confetti and sparkles burst on the reveal. Viral transformation trend.' }
+  ]},
+  { category:'📢 Publicité & Produit', items:[
+    { name:'Produit tournant', desc:'Objet en studio', prompt:'Product commercial shot. A premium product rotates slowly on a rotating pedestal. Pure black studio background. Locked-off camera. Dramatic rim lighting. Elegant, luxurious. 4K.' },
+    { name:'Mode éditoriale', desc:'Mannequin en défilé', prompt:'High fashion editorial shot. A model walks confidently down an illuminated runway, fabric flowing. Dramatic backlighting. Slow dolly alongside. Vogue magazine aesthetic.' },
+    { name:'Food stylisée', desc:'Plat qui se prépare', prompt:'Food commercial shot. Steam rises gently from a beautifully plated dish, sauce being drizzled in slow motion. Dark moody background. Slow dolly-in, macro detail. Michelin-star quality.' },
+    { name:'Boisson pétillante', desc:'Verre qui se remplit', prompt:'Beverage commercial shot. Golden liquid pours into a crystal glass, ice cubes clinking, bubbles rising. Dark background with soft backlight. Extreme slow motion, macro.' }
+  ]},
+  { category:'🎵 Musique & Clip', items:[
+    { name:'Performance scène', desc:'Chanteur en concert', prompt:'Music video performance shot. A singer leans into a vintage microphone, eyes closed, sweat on forehead. Bright spotlights cutting through smoke. Slow rotating camera. 35mm film grain.' },
+    { name:'Danse synchronisée', desc:'Groupe de danseurs', prompt:'Music video dance shot. A group of dancers performs a synchronized routine in an industrial warehouse. Wide static camera. Industrial beams and shafts of light. Flash frames on the beat.' },
+    { name:'Clip plan-séquence', desc:'Un seul plan continu', prompt:'Music video continuous shot. Camera follows a singer walking backward through connected rooms. Continuous Steadicam, no cuts. Rich cinematic lighting. Anamorphic lens.' }
+  ]},
+  { category:'💥 Action & Sport', items:[
+    { name:'Ralenti sportif', desc:'Moment héroïque', prompt:'Sports cinematic shot in extreme slow motion. An athlete jumps and twists mid-air, sweat drops flying. Stadium background with blurred crowd. Dramatic backlight. Nike commercial style.' },
+    { name:'Combat martial', desc:'Combat au ralenti', prompt:'Martial arts action shot. Two fighters exchange kicks and punches. Dojo with wooden floor. Fast cuts, whip pans, slow-motion impact frames. Warm low-key lighting. Matrix-style bullet time.' },
+    { name:'Course extrême', desc:'Sport extrême POV', prompt:'Extreme sports POV shot. A skier launches off a cliff, camera mounted on the helmet. Steep mountain terrain below. Fast forward motion, wind noise. GoPro hero shot.' },
+    { name:'Football but', desc:'But au ralenti', prompt:'Football cinematic shot. A player strikes the ball, net bulges in slow motion. Stadium at night. Camera behind the goal, then cut to celebration. Explosive joy.' }
+  ]},
+  { category:'🌙 Artistique & Rêve', items:[
+    { name:'Rêve surréaliste', desc:'Scène onirique', prompt:'Surreal dream sequence. A figure floats weightlessly through a vast room where objects drift slowly in mid-air. Impossible architecture. Slow rotating camera. Soft pastel lighting. Salvador Dali meets David Lynch.' },
+    { name:'Poème visuel', desc:'Scène contemplative', prompt:'Poetic contemplative shot. A single figure stands at the edge of a still lake at dawn, reflection perfectly mirrored. Very slow camera drift. Soft blue and pink dawn light. Andrei Tarkovsky aesthetic.' },
+    { name:'Métaphore visuelle', desc:'Symbole visuel', prompt:'Visual metaphor shot. A single hand reaches up from a sea of identical hands, breaking through.
