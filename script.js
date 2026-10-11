@@ -1,0 +1,261 @@
+var API_KEY = '';
+var API_BASE = 'https://api.magichour.ai/v1';
+
+var ART_STYLES = { realistic:'Cinematic', ghibli:'Studio Ghibli', anime:'Anime', pixar:'3D Render', disney:'Cartoon', cartoon:'Cartoon', netflix:'Cinematic' };
+var STYLE_PROMPTS = { realistic:'cinematic photography, shot on 35mm film, natural lighting, photorealistic, subtle film grain.', ghibli:'Studio Ghibli animation aesthetic, Hayao Miyazaki style, hand-painted watercolor backgrounds, warm pastel palette.', anime:'modern Japanese anime style, cel-shaded characters, sharp ink outlines, vibrant colors.', pixar:'high-quality Pixar 3D animation style, subsurface scattering, soft cinematic lighting.', disney:'classic Disney 2D animation style, hand-drawn cel animation, elegant line work.', cartoon:'2D cartoon animation style, bold black outlines, flat vibrant colors.', netflix:'Netflix original series cinematic look, dramatic key light, teal and orange color grading.' };
+
+var scenes = [];
+var isRunning = false;
+var stopFlag = false;
+var timerInterval = null;
+var timerStart = 0;
+var currentSceneNum = 0;
+var totalScenes = 0;
+var selectedSceneId = null;
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+function log(msg){
+  var el = document.getElementById('log');
+  if(!el) return;
+  var time = new Date().toLocaleTimeString('fr-FR');
+  el.textContent = el.textContent + '\n[' + time + '] ' + msg;
+  el.scrollTop = el.scrollHeight;
+}
+
+var toastTimeout = null;
+function toast(msg, type){
+  type = type || 'success';
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  requestAnimationFrame(function(){ t.classList.add('visible'); });
+  if(toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(function(){ t.classList.remove('visible'); }, 3000);
+}
+
+function formatTime(s){
+  var m = Math.floor(s/60), sec = s%60;
+  return (m<10?'0':'')+m+':'+(sec<10?'0':'')+sec;
+}
+
+function startTimer(){
+  timerStart = Date.now();
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(function(){
+    var e = Math.floor((Date.now()-timerStart)/1000);
+    document.getElementById('timerVal').textContent = formatTime(e);
+  }, 1000);
+}
+function stopTimer(){ if(timerInterval){ clearInterval(timerInterval); timerInterval=null; } }
+
+function updateTimerLbl(t, p){
+  document.getElementById('timerLbl').textContent = t || '';
+  if(p !== undefined) document.getElementById('progressFill').style.width = p + '%';
+}
+
+function updateApiUI(){
+  var savedKey = '';
+  try { savedKey = localStorage.getItem('magic_hour_api_key') || ''; }
+  catch(e) { document.getElementById('apiDiag').textContent = '⚠️ Stockage local BLOQUÉ.'; return; }
+  
+  document.getElementById('apiKeyInput').value = savedKey;
+  if(savedKey) {
+    document.getElementById('apiDiag').textContent = '✓ Clé enregistrée. Longueur: ' + savedKey.length + ' caractères. Finit par: ...' + savedKey.slice(-4);
+    API_KEY = savedKey;
+  } else {
+    document.getElementById('apiDiag').textContent = '⚠️ Aucune clé API enregistrée. Veuillez en saisir une.';
+    API_KEY = '';
+  }
+}
+
+function addScene(){
+  scenes.push({ id: Date.now()+Math.random(), imageData: null, videoData: null, description:'', dialogue:'', character:'', status:'idle', videoUrl:null, error:null });
+  if(!selectedSceneId) selectedSceneId = scenes[0].id;
+  renderScenes(); renderSceneSelector(); updateGenBtn();
+}
+
+function removeScene(id){
+  scenes = scenes.filter(function(s){ return s.id !== id; });
+  if(selectedSceneId === id) selectedSceneId = scenes[0] ? scenes[0].id : null;
+  renderScenes(); renderSceneSelector(); updateGenBtn();
+}
+
+function updateField(id, field, value){
+  for(var i=0;i<scenes.length;i++){ if(scenes[i].id===id){ scenes[i][field]=value; break; } }
+}
+
+function onImage(id, file){
+  if(!file || file.type.indexOf('image/')!==0) return;
+  var r = new FileReader();
+  r.onload = function(e){
+    for(var i=0;i<scenes.length;i++){ if(scenes[i].id===id){ scenes[i].imageData=e.target.result; scenes[i].videoData=null; break; } }
+    renderScenes(); log('Image chargée');
+  };
+  r.readAsDataURL(file);
+}
+
+function onVideo(id, file){
+  if(!file || file.type.indexOf('video/')!==0) return;
+  var r = new FileReader();
+  r.onload = function(e){
+    for(var i=0;i<scenes.length;i++){ if(scenes[i].id===id){ scenes[i].videoData={ dataUri:e.target.result, fileName:file.name, extension:(file.name.split('.').pop()||'mp4').toLowerCase() }; scenes[i].imageData=null; break; } }
+    renderScenes(); log('Vidéo chargée : '+file.name);
+  };
+  r.readAsDataURL(file);
+}
+
+function clearImage(id){ for(var i=0;i<scenes.length;i++) if(scenes[i].id===id){ scenes[i].imageData=null; break; } renderScenes(); }
+function clearVideo(id){ for(var i=0;i<scenes.length;i++) if(scenes[i].id===id){ scenes[i].videoData=null; break; } renderScenes(); }
+
+function renderScenes(){
+  var list = document.getElementById('scenesList');
+  if(scenes.length===0){ list.innerHTML = '<div class="empty">Aucune scène</div>'; return; }
+  var html = '';
+  for(var i=0;i<scenes.length;i++){
+    var s = scenes[i];
+    var cls = 'sc-status', txt = 'En attente';
+    if(s.status==='done'){ cls+=' done'; txt='OK'; } else if(s.status==='processing'){ cls+=' processing'; txt='En cours'; } else if(s.status==='failed'){ cls+=' failed'; txt='Échec'; }
+    html += '<div class="scene"><div class="sc-head"><div class="sc-num">'+(i+1)+'</div><div class="sc-title">Scène '+(i+1)+'</div><div class="'+cls+'">'+txt+'</div>';
+    if(scenes.length>1) html += '<button class="sc-rm" data-rm="'+s.id+'">×</button>';
+    html += '</div>';
+    html += '<div class="fld"><label>Vidéo de départ (optionnel)</label>';
+    if(s.videoData){ html += '<div class="file-zone"><video src="'+s.videoData.dataUri+'" controls></video><button class="f-rm" data-cv="'+s.id+'">Retirer la vidéo</button></div>'; } else if(!s.imageData){ html += '<label class="file-zone"><input type="file" accept="video/*" data-vf="'+s.id+'"><div class="up-t">+ Ajouter une vidéo</div></label>'; } else { html += '<div style="font-size:.66rem;color:#999;padding:.3rem 0;">(Retire l\'image d\'abord)</div>'; }
+    html += '</div>';
+    html += '<div class="fld"><label>Image de départ (optionnel)</label>';
+    if(s.imageData){ html += '<div class="file-zone"><img src="'+s.imageData+'"><button class="f-rm" data-ci="'+s.id+'">Retirer l\'image</button></div>'; } else if(!s.videoData){ html += '<label class="file-zone"><input type="file" accept="image/*" data-if="'+s.id+'"><div class="up-t">+ Ajouter une image</div></label>'; } else { html += '<div style="font-size:.66rem;color:#999;padding:.3rem 0;">(Retire la vidéo d\'abord)</div>'; }
+    html += '</div>';
+    html += '<div class="fld"><label>Description de la scène</label><textarea data-f="description" data-s="'+s.id+'" placeholder="Ex: Un chat qui danse...">'+esc(s.description)+'</textarea></div>';
+    html += '<div class="fld"><label>Texte que le personnage dit</label><textarea data-f="dialogue" data-s="'+s.id+'" placeholder="Ex: Bonjour !">'+esc(s.dialogue)+'</textarea></div>';
+    html += '<div class="fld"><label>Description du personnage</label><textarea data-f="character" data-s="'+s.id+'" placeholder="Ex: Un chat noir...">'+esc(s.character)+'</textarea></div>';
+    if(s.videoUrl) html += '<div class="sc-vid"><video src="'+s.videoUrl+'" controls></video></div>';
+    html += '</div>';
+  }
+  list.innerHTML = html;
+  list.querySelectorAll('[data-rm]').forEach(function(b){ b.addEventListener('click',function(){ removeScene(parseFloat(this.getAttribute('data-rm'))); }); });
+  list.querySelectorAll('[data-ci]').forEach(function(b){ b.addEventListener('click',function(){ clearImage(parseFloat(this.getAttribute('data-ci'))); }); });
+  list.querySelectorAll('[data-cv]').forEach(function(b){ b.addEventListener('click',function(){ clearVideo(parseFloat(this.getAttribute('data-cv'))); }); });
+  list.querySelectorAll('input[data-if]').forEach(function(inp){ inp.addEventListener('change',function(){ onImage(parseFloat(this.getAttribute('data-if')), this.files[0]); }); });
+  list.querySelectorAll('input[data-vf]').forEach(function(inp){ inp.addEventListener('change',function(){ onVideo(parseFloat(this.getAttribute('data-vf')), this.files[0]); }); });
+  list.querySelectorAll('textarea[data-f]').forEach(function(ta){ ta.addEventListener('input',function(){ updateField(parseFloat(this.getAttribute('data-s')), this.getAttribute('data-f'), this.value); }); });
+}
+
+function renderSceneSelector(){
+  var sel = document.getElementById('sceneSelector');
+  if(scenes.length===0){ sel.innerHTML = '<div style="font-size:.72rem;color:#999">Ajoute une scène d\'abord</div>'; return; }
+  var html = '';
+  for(var i=0;i<scenes.length;i++){ var s = scenes[i]; var cls = s.id === selectedSceneId ? 'sc-chip active' : 'sc-chip'; html += '<div class="'+cls+'" data-ss="'+s.id+'">Scène '+(i+1)+'</div>'; }
+  sel.innerHTML = html;
+  sel.querySelectorAll('[data-ss]').forEach(function(el){ el.addEventListener('click',function(){ selectedSceneId = parseFloat(this.getAttribute('data-ss')); renderSceneSelector(); }); });
+}
+
+function dataUriToBlob(dataUri){
+  var parts = dataUri.split(','); var mime = parts[0].match(/:(.*?);/)[1]; var bin = atob(parts[1]); var arr = new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); return new Blob([arr],{type:mime});
+}
+
+function uploadFileToMagicHour(dataUri, ext, type){
+  return new Promise(function(resolve,reject){
+    fetch(API_BASE+'/files/upload-urls',{ method:'POST', headers:{ 'Authorization':'Bearer '+API_KEY, 'Content-Type':'application/json', 'Accept':'application/json' }, body:JSON.stringify({items:[{type:type,extension:ext}]}), cache: 'no-store' })
+    .then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error('HTTP '+r.status+' — '+t.slice(0,200)); }); return r.json(); })
+    .then(function(d){
+      var item = d.items && d.items[0];
+      if(!item || !item.upload_url) throw new Error('Pas d\'URL upload');
+      log('Upload en cours...');
+      var blob = dataUriToBlob(dataUri);
+      return fetch(item.upload_url,{method:'PUT',headers:{'Content-Type':'application/octet-stream'},body:blob, cache: 'no-store'})
+      .then(function(pr){ if(!pr.ok) throw new Error('Upload HTTP '+pr.status); log('Fichier uploadé ✓'); resolve(item.file_path); });
+    }).catch(reject);
+  });
+}
+
+function buildFullPrompt(scene){
+  var style = document.getElementById('globalStyle').value; var sp = STYLE_PROMPTS[style] || ''; var p = '';
+  if(scene.description) p += scene.description + '. '; if(scene.character) p += 'Character: ' + scene.character + '. '; if(scene.dialogue) p += 'Says: "' + scene.dialogue + '". '; p += sp;
+  return p.trim() || 'cinematic scene with natural motion';
+}
+
+function handleJobRes(res){
+  if(!res.ok){ return res.text().then(function(t){ throw new Error('HTTP '+res.status+' — '+t.slice(0,300)); }); }
+  return res.json().then(function(d){ var id = d.id || (d.data && d.data.id); if(!id) throw new Error('Pas de job ID'); log('Job créé: '+id); return id; });
+}
+
+function createVideoJob(scene, duration){
+  var style = document.getElementById('globalStyle').value; var artStyle = ART_STYLES[style] || 'Cinematic'; var fullPrompt = buildFullPrompt(scene); var body;
+  if(scene.videoData){ log('Upload vidéo...'); return uploadFileToMagicHour(scene.videoData.dataUri, scene.videoData.extension, 'video').then(function(path){ log('Mode: video-to-video'); body = { name:'Studio — Scène '+currentSceneNum, start_seconds:0, end_seconds:parseInt(duration,10), fps_resolution:'HALF', style:{ art_style:artStyle, prompt_type:'custom', prompt:fullPrompt, version:'default', model:'default' }, assets:{ video_source:'file', video_file_path:path } }; return fetch(API_BASE+'/video-to-video',{ method:'POST', headers:{ 'Authorization':'Bearer '+API_KEY, 'Content-Type':'application/json', 'Accept':'application/json' }, body:JSON.stringify(body), cache: 'no-store' }).then(handleJobRes); }); }
+  if(scene.imageData){ log('Upload image...'); return uploadFileToMagicHour(scene.imageData, 'jpg', 'image').then(function(path){ log('Mode: image-to-video'); body = { name:'Studio — Scène '+currentSceneNum, end_seconds:parseInt(duration,10), model:'kling-3.0', resolution:'720p', aspect_ratio:'9:16', audio:true, style:{ prompt:fullPrompt }, assets:{ image_file_path:path } }; return fetch(API_BASE+'/image-to-video',{ method:'POST', headers:{ 'Authorization':'Bearer '+API_KEY, 'Content-Type':'application/json', 'Accept':'application/json' }, body:JSON.stringify(body), cache: 'no-store' }).then(handleJobRes); }); }
+  log('Mode: text-to-video'); body = { name:'Studio — Scène '+currentSceneNum, end_seconds:parseInt(duration,10), model:'kling-3.0', resolution:'720p', aspect_ratio:'9:16', audio:true, style:{ prompt:fullPrompt } };
+  return fetch(API_BASE+'/text-to-video',{ method:'POST', headers:{ 'Authorization':'Bearer '+API_KEY, 'Content-Type':'application/json', 'Accept':'application/json' }, body:JSON.stringify(body), cache: 'no-store' }).then(handleJobRes);
+}
+
+function pollVideoJob(jobId){
+  return new Promise(function(resolve,reject){
+    var attempt=0, max=120; var intervals=[5,5,8,8,10,10,15,15,20,20,30];
+    function check(){
+      if(stopFlag){ reject(new Error('Arrêt')); return; } if(attempt>=max){ reject(new Error('Timeout')); return; }
+      var wait = intervals[Math.min(attempt, intervals.length-1)]; attempt++;
+      fetch(API_BASE+'/video-projects/'+encodeURIComponent(jobId),{ method:'GET', headers:{ 'Authorization':'Bearer '+API_KEY, 'Accept':'application/json' }, cache: 'no-store' })
+      .then(function(r){ return r.json(); }).then(function(d){
+        var st = d.status || 'unknown'; log('Scène '+currentSceneNum+'/'+totalScenes+' · '+st);
+        if(st==='complete'||st==='completed'||st==='succeeded'||st==='done'){ var url = (d.download && d.download.url) || (d.output && d.output.url) || d.url; if(!url) url = (d.downloads && d.downloads[0] && d.downloads[0].url) || (d.output && d.output.url); if(!url) return reject(new Error('Pas d\'URL vidéo')); return resolve(url); }
+        if(st==='error'||st==='failed'||st==='cancelled'){ return reject(new Error('Échec: '+(d.error||d.message||st))); }
+        setTimeout(check, wait*1000);
+      }).catch(function(){ setTimeout(check, 5000); });
+    } check();
+  });
+}
+
+function genererScene(scene, num, total, duration){
+  return new Promise(function(resolve){
+    scene.status = 'processing'; currentSceneNum = num; renderScenes(); log('=== Scène '+num+' / '+total+' ===');
+    createVideoJob(scene, duration).then(function(jobId){ return pollVideoJob(jobId); }).then(function(url){ scene.status='done'; scene.videoUrl=url; renderScenes(); renderGallery(); log('✓ Scène '+num+' prête'); resolve(true); }).catch(function(e){ scene.status='failed'; scene.error=e.message; renderScenes(); log('✗ Scène '+num+' échec: '+e.message); resolve(false); });
+  });
+}
+
+async function start(){
+  if(isRunning) return; if(scenes.length===0){ toast('Ajoutez une scène','error'); return; } if(!API_KEY) { toast('Veuillez enregistrer votre clé API d\'abord.', 'error'); return; }
+  isRunning = true; stopFlag = false; updateGenBtn(); document.getElementById('stopBtn').style.display = 'block'; document.getElementById('timerBox').classList.add('visible');
+  var duration = document.getElementById('storyDuration').value; var total = scenes.length; totalScenes = total;
+  stopTimer(); document.getElementById('timerVal').textContent = '00:00'; document.getElementById('progressFill').style.width = '0%'; startTimer(); updateTimerLbl('Démarrage...'); log('=== Début '+total+' scène(s) ===');
+  var ok = 0;
+  for(var i=0;i<scenes.length;i++){ if(stopFlag) break; var success = await genererScene(scenes[i], i+1, total, duration); if(success) ok++; updateTimerLbl('Scène '+(i+1)+' / '+total+' terminée', Math.round(((i+1)/total)*100)); }
+  isRunning = false; stopFlag = false; stopTimer(); updateGenBtn(); document.getElementById('stopBtn').style.display = 'none';
+  var msg = ok+'/'+total+' vidéo'+(ok>1?'s':'')+' générée'+(ok>1?'s':''); log('=== FIN: '+msg+' ==='); updateTimerLbl('Terminé · '+msg, 100); toast(msg, ok>0?'success':'error');
+}
+
+function renderGallery(){
+  var g = document.getElementById('gallery'); var html = '';
+  for(var i=0;i<scenes.length;i++){ if(scenes[i].status==='done' && scenes[i].videoUrl){ html += '<div class="g-item"><video src="'+scenes[i].videoUrl+'" controls></video><div class="g-cap"><span>Scène '+(i+1)+'</span><a href="'+scenes[i].videoUrl+'" target="_blank" download="scene-'+(i+1)+'.mp4">Télécharger</a></div></div>'; } }
+  g.innerHTML = html || '<div class="empty">Aucune vidéo</div>';
+}
+
+function updateGenBtn(){
+  var btn = document.getElementById('generateBtn'); btn.disabled = scenes.length === 0 || isRunning;
+  if(isRunning) btn.textContent = '⏳ Génération en cours...'; else if(scenes.length === 0) btn.textContent = 'Ajoutez une scène'; else btn.textContent = '🎬 Générer ' + scenes.length + ' vidéo' + (scenes.length>1?'s':'');
+}
+
+function init(){
+  try { localStorage.setItem('test_storage', '1'); localStorage.removeItem('test_storage'); document.getElementById('apiDiag').textContent = 'Stockage OK. Chargement de la clé...'; } catch(e) { document.getElementById('apiDiag').textContent = '❌ Le navigateur bloque le stockage local.'; return; }
+  updateApiUI();
+  document.getElementById('saveKeyBtn').addEventListener('click', function(){
+    var newKey = document.getElementById('apiKeyInput').value.trim(); if(!newKey) { toast('Veuillez entrer une clé valide.', 'error'); return; }
+    try { localStorage.setItem('magic_hour_api_key', newKey); API_KEY = newKey; updateApiUI(); toast('Clé API enregistrée localement ✓', 'success'); log('Clé API mise à jour.'); } catch(e) { toast('Erreur : impossible d\'enregistrer (stockage bloqué).', 'error'); }
+  });
+  document.getElementById('testKeyBtn').addEventListener('click', function() {
+    var keyToTest = document.getElementById('apiKeyInput').value.trim(); if(!keyToTest) { toast('Veuillez entrer une clé.', 'error'); return; }
+    document.getElementById('apiDiag').textContent = '⏳ Test de la clé en cours...';
+    fetch(API_BASE + '/files/upload-urls', { method: 'POST', headers: { 'Authorization': 'Bearer ' + keyToTest, 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({items:[{type:'image', extension:'jpg'}]}), cache: 'no-store' })
+    .then(function(r) {
+      if(r.status === 401) { document.getElementById('apiDiag').textContent = '❌ Erreur 401 : Clé invalide ou non autorisée.'; toast('Clé API invalide (401)', 'error'); }
+      else if (r.ok) { document.getElementById('apiDiag').textContent = '✅ Clé API valide et fonctionnelle !'; toast('Clé API valide !', 'success'); }
+      else { return r.text().then(function(t) { document.getElementById('apiDiag').textContent = '⚠️ Erreur HTTP ' + r.status + ' : ' + t.slice(0, 100); toast('Erreur HTTP ' + r.status, 'error'); }); }
+    }).catch(function(e) { document.getElementById('apiDiag').textContent = '❌ Erreur réseau : ' + e.message; toast('Erreur réseau', 'error'); });
+  });
+  document.getElementById('addSceneBtn').addEventListener('click', addScene);
+  document.getElementById('generateBtn').addEventListener('click', start);
+  document.getElementById('stopBtn').addEventListener('click', function(){ stopFlag = true; log('Arrêt demandé...'); });
+  document.querySelectorAll('.tab').forEach(function(t){ t.addEventListener('click', function(){ var target = this.getAttribute('data-tab'); document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('active'); }); this.classList.add('active'); document.querySelectorAll('.panel').forEach(function(x){ x.classList.remove('active'); }); document.getElementById(target).classList.add('active'); }); });
+  addScene();
+  log('Studio Histoire IA prêt — Magic Hour');
+}
+i
