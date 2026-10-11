@@ -1,0 +1,58 @@
+var API_KEY = '';
+var API_BASE = 'https://api.magichour.ai/v1';
+
+function log(msg){
+  var el = document.getElementById('log');
+  if(!el) return;
+  var time = new Date().toLocaleTimeString('fr-FR');
+  el.textContent = el.textContent + '\n[' + time + '] ' + msg;
+  el.scrollTop = el.scrollHeight;
+}
+
+function updateApiUI(){
+  var savedKey = localStorage.getItem('magic_hour_api_key') || '';
+  document.getElementById('apiKeyInput').value = savedKey;
+  if(savedKey) {
+    document.getElementById('apiDiag').textContent = '✓ Clé enregistrée (' + savedKey.length + ' caractères)';
+    API_KEY = savedKey;
+  } else {
+    document.getElementById('apiDiag').textContent = '⚠️ Aucune clé API enregistrée.';
+    API_KEY = '';
+  }
+}
+
+function init(){
+  document.getElementById('apiDiag').textContent = '✅ Script chargé ! En attente de la clé.';
+  updateApiUI();
+
+  document.getElementById('saveKeyBtn').addEventListener('click', function(){
+    var newKey = document.getElementById('apiKeyInput').value.trim();
+    if(!newKey) { alert('Entrez une clé'); return; }
+    localStorage.setItem('magic_hour_api_key', newKey);
+    API_KEY = newKey;
+    updateApiUI();
+    alert('Clé enregistrée !');
+  });
+
+  document.getElementById('testKeyBtn').addEventListener('click', function() {
+    var keyToTest = document.getElementById('apiKeyInput').value.trim();
+    if(!keyToTest) { alert('Entrez une clé'); return; }
+    document.getElementById('apiDiag').textContent = '⏳ Test en cours...';
+    
+    fetch(API_BASE + '/files/upload-urls', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + keyToTest, 'Content-Type': 'application/json' },
+      body: JSON.stringify({items:[{type:'image', extension:'jpg'}]})
+    })
+    .then(r => {
+      if(r.status === 401) { document.getElementById('apiDiag').textContent = '❌ Erreur 401: Clé invalide'; }
+      else if (r.ok) { document.getElementById('apiDiag').textContent = '✅ Clé API valide !'; }
+      else { document.getElementById('apiDiag').textContent = '⚠️ Erreur HTTP ' + r.status; }
+    })
+    .catch(e => { document.getElementById('apiDiag').textContent = '❌ Erreur réseau'; });
+  });
+  
+  log('Prêt.');
+}
+
+init();
